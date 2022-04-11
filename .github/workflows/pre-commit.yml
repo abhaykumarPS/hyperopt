@@ -1,45 +1,63 @@
-# https://pre-commit.com
-# This GitHub Action assumes that the repo contains a valid .pre-commit-config.yaml file.
-name: pre-commit, build and test
-on: [pull_request, push]
+name: Test
+
+on: [push, pull_request]
+
 jobs:
-  pre-commit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cache/pre-commit
-            ~/.cache/pip
-          key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-      - uses: actions/setup-python@v2
-      - run: pip install pre-commit
-      - run: pre-commit --version
-      - run: pre-commit install
-      - run: pre-commit run --all-files
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [3.7]
+        os:
+          - 'ubuntu-20.04'
+        python-version:
+          - '3.8'
+        arch:
+          - 'x86_64'
     steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+        
+    - name: Install Dependencies
+      run: |
+        apt-get update && apt-get install python3 && apt-get install python3-pip
+        apt-get -y install autoconf automake build-essential cmake pkg-config llvm-dev
+        python3 -m pip install --upgrade pip
+        python3 setup.py install 
+        pip install -e '.[MongoTrials, SparkTrials, ATPE, dev]'
+        pip install pyspark
+        python -m pytest ./hyperopt/tests/unit
+        PYSPARK_PIN_THREAD=true pytest hyperopt/tests/integration/test_spark.py
+        PYSPARK_PIN_THREAD=false pytest hyperopt/tests/integration/test_spark.py
+
+  test_arm64: 
+     runs-on: ubuntu-latest
+     strategy:
+      matrix:
+        python-version: [ 3.8]
+      fail-fast: false
+     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+      - name: Set up QEMU
+        id: qemu
+        uses: docker/setup-qemu-action@v1
+      - name: Install and Run tests
         run: |
-          python -m pip install --upgrade pip
-          pip install -e '.[MongoTrials, SparkTrials, ATPE, dev]'
-          pip install pyspark
-      - name: Test with pytest - Unit tests
-        run: |
-          python -m pytest ./hyperopt/tests/unit
-      - name: Test spark plugin - pin thread mode
-        run: |
-          PYSPARK_PIN_THREAD=true pytest hyperopt/tests/integration/test_spark.py
-      - name: Test spark plugin - non pin thread mode
-        run: |
-          PYSPARK_PIN_THREAD=false pytest hyperopt/tests/integration/test_spark.py
+               docker run --rm -v ${{ github.workspace }}:/ws:rw --workdir=/ws \
+               arm64v8/ubuntu:20.04 \
+               bash -exc 'apt-get update && apt-get -y install python3.8 curl git && \
+                apt-get update && apt-get install -y python3 && apt-get install -y python3-pip && \
+                apt-get -y install autoconf automake build-essential cmake libtool mercurial pkg-config llvm-dev && \
+                python3.8 -m pip install --upgrade pip && \
+                python3.8 --version && \
+                uname -m && \
+                python3.8 setup.py install && \
+                pip install -e '.[MongoTrials, SparkTrials, ATPE, dev]' && \
+                pip install pyspark && \
+                python -m pytest ./hyperopt/tests/unit && \
+                PYSPARK_PIN_THREAD=true pytest hyperopt/tests/integration/test_spark.py && \
+                PYSPARK_PIN_THREAD=false pytest hyperopt/tests/integration/test_spark.py && \
+                deactivate'
