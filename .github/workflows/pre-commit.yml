@@ -36,4 +36,10 @@ jobs:
           pip install pyspark
       - name: Test with pytest - Unit tests
         run: |
-          python -m pytest 
+          python -m pytest ./hyperopt/tests/unit
+      - name: Test spark plugin - pin thread mode
+        run: |
+          PYSPARK_PIN_THREAD=true pytest hyperopt/tests/integration/test_spark.py
+      - name: Test spark plugin - non pin thread mode
+        run: |
+          PYSPARK_PIN_THREAD=false pytest hyperopt/tests/integration/test_spark.py
