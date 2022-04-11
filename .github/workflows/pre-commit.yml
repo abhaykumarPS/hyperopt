@@ -54,7 +54,7 @@ jobs:
                 python3.8 --version && \
                 uname -m && \
                 python3.8 setup.py install && \
-                pip install MongoTrials, SparkTrials, ATPE, dev && \
+                pip install -e . && \
                 pip install pyspark && \
                 python -m pytest ./hyperopt/tests/unit && \
                 PYSPARK_PIN_THREAD=true pytest hyperopt/tests/integration/test_spark.py && \
